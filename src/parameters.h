@@ -333,6 +333,24 @@ namespace libcmaes
       {
 	return _lambda;
       }
+
+      /**
+       * \brief sets gamma, number of evaluations per offsprint.
+       * @param v value of the parameter tolerance.
+       */
+      void set_gamma(const int &gamma)
+      {
+	_gamma = gamma;
+      }
+
+      /**
+       * \brief returns gamma, number of evaluations per offspring
+       * @return gamma
+       */
+      int get_gamma() const
+      {
+        return _gamma;
+      }
       
       /**
        * \brief returns the problem's dimension
@@ -556,6 +574,7 @@ namespace libcmaes
     protected:
       int _dim; /**< function space dimensions. */
       int _lambda = -1; /**< number of offsprings. */
+      int _gamma = 1; /**< number of evaluations per offspring. */
       int _max_iter = -1; /**< max iterations. */
       int _max_fevals = -1; /**< max budget as number of function evaluations. */
       
