@@ -87,17 +87,40 @@ namespace libcmaes
 #ifdef HAVE_DEBUG
     std::chrono::time_point<std::chrono::system_clock> tstart = std::chrono::system_clock::now();
 #endif
-    // one candidate per row.
-#pragma omp parallel for if (_parameters._mt_feval)
+    // one candidate per row, send the vectors to be evaluated
+    int command = 0;
     for (int r=0;r<candidates.cols();r++)
       {
 	_solutions._candidates.at(r).set_x(candidates.col(r));
 	_solutions._candidates.at(r).set_id(r);
+        // send the evaluation command
+        //std::cout << "esostrategy.h 1st Send Rank " << 0 << std::endl;
+        MPI_Send(&command, 1, MPI_INT, r+1, 0, MPI_COMM_WORLD);
+
+        // send the data to be evaluated
 	if (phenocandidates.size())
-	  _solutions._candidates.at(r).set_fvalue(_func(phenocandidates.col(r).data(),candidates.rows()));
-	else _solutions._candidates.at(r).set_fvalue(_func(candidates.col(r).data(),candidates.rows()));
-	
-	//std::cerr << "candidate x: " << _solutions._candidates.at(r)._x.transpose() << std::endl;
+        {
+            std::cout << "esostrategy.h 2nd Send Rank " << 0 << " evalp" << std::endl;
+            MPI_Send(phenocandidates.col(r).data(), candidates.rows(), MPI_DOUBLE, r+1, 0, MPI_COMM_WORLD);
+        }
+	else
+        {
+            std::cout << "esostrategy.h 3rd Send Rank " << 0 << " eval" <<  std::endl;
+            MPI_Send(candidates.col(r).data(), candidates.rows(), MPI_DOUBLE, r+1, 0, MPI_COMM_WORLD);
+        }
+      }
+    // we will retrieve our fvals now
+    for (int r=0;r<candidates.cols();r++)
+      {
+	_solutions._candidates.at(r).set_x(candidates.col(r));
+	_solutions._candidates.at(r).set_id(r);
+
+        MPI_Status fvalue_status;
+        
+        double fvalue = 1000.0;
+        //std::cout << "esostrategy.h 1st Recv Rank " << 0 << std::endl;
+        MPI_Recv(&fvalue, 1, MPI_DOUBLE, r+1, 0, MPI_COMM_WORLD,&fvalue_status);
+	_solutions._candidates.at(r).set_fvalue(fvalue);
       }
     int nfcalls = candidates.cols();
     
@@ -133,7 +156,7 @@ namespace libcmaes
 	if (count/2.0 < candidates.cols()/2)
 	  {
 #ifdef HAVE_DEBUG
-	    std::cout << "reinjecting solution=" << ref_fvalue << std::endl;
+	    //std::cout << "reinjecting solution=" << ref_fvalue << std::endl;
 #endif
 	    _solutions._candidates.at(1) = ref_candidate;
 	  }
@@ -168,15 +191,43 @@ namespace libcmaes
       return _gfunc(x.data(),_parameters._dim);
     dVec vgradf(_parameters._dim);
     dVec epsilon = 1e-8 * (dVec::Constant(_parameters._dim,1.0) + x.cwiseAbs());
-    double fx = _func(x.data(),_parameters._dim);
-#pragma omp parallel for if (_parameters._mt_feval)
-    for (int i=0;i<_parameters._dim;i++)
-      {
+
+    // send off fx to be evaluated by rank 1 (0 tag signals to use the FitFunc function)
+    int command = 0;
+    //std::cout << "esostrategy.h 4th Send Rank " << 0 << std::endl;
+    MPI_Send(&command, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+
+    //std::cout << "esostrategy.h 5th Send Rank " << 0 << std::endl;
+    MPI_Send(x.data(), _parameters._dim, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD);
+
+    // send off the gradient evaluation portions to remaining nodes
+    for (int i = 0; i<_parameters._dim;++i)
+    {
 	dVec ei1 = x;
 	ei1(i,0) += epsilon(i);
 	ei1(i,0) = std::min(ei1(i,0),_parameters.get_gp().get_boundstrategy_ref().getUBound(i));
-	double gradi = (_func(ei1.data(),_parameters._dim) - fx)/epsilon(i);
-	vgradf(i,0) = gradi;
+        //std::cout << "esostrategy.h 6th Send Rank " << 0 << " grad" <<  std::endl;
+        MPI_Send(&command, 1, MPI_INT, i+2, 0, MPI_COMM_WORLD);
+        std::cout << "esostrategy.h 7th Send Rank " << 0 << " grad " << std::endl;
+        MPI_Send(ei1.data(), _parameters._dim, MPI_DOUBLE, i+2, 0, MPI_COMM_WORLD);
+    }
+
+    // recv the fitness evaluation from rank 1
+    MPI_Status fx_status;
+    double fx;
+    //std::cout << "esostrategy.h 2nd Recv Rank " << 0 << std::endl;
+    MPI_Recv(&fx, 1, MPI_DOUBLE, 1, 0, MPI_COMM_WORLD,&fx_status);
+
+    // recv remaining fitness evaluations
+    for (int i=0;i<_parameters._dim;i++)
+      {
+        MPI_Status gradi_status;
+        double gradi;
+        //std::cout << "esostrategy.h 3rd Recv Rank " << 0 << std::endl;
+        MPI_Recv(&gradi, 1, MPI_DOUBLE, i+2, 0, MPI_COMM_WORLD,&gradi_status);
+
+        // store it
+	vgradf(i,0) = (gradi - fx)/epsilon(i);
       }
     update_fevals(_parameters._dim+1); // numerical gradient increases the budget.
     return vgradf;
@@ -359,16 +410,32 @@ namespace libcmaes
   template<class TParameters,class TSolutions,class TStopCriteria>
   void ESOStrategy<TParameters,TSolutions,TStopCriteria>::eval_candidates_uh(const dMat& candidates, const dMat& candidates_uh, std::vector<RankedCandidate>& nvcandidates, int& nfcalls)
 	{
-	// re-evaluate
+	// send the candidates for evaluation
+        int command = 0;
 	for (int r=0;r<candidates.cols();r++)
 	  {
 	    if (r < _solutions._lambda_reev)
 	      {
-		double nfvalue = _func(candidates_uh.col(r).data(),candidates_uh.rows());
+                //std::cout << "esostrategy.h 8th Send Rank " << 0 << std::endl;
+                MPI_Send(&command,1, MPI_INT, r+1, 0, MPI_COMM_WORLD);
+                //std::cout << "esostrategy.h 9th Send Rank " << 0 << std::endl;
+                MPI_Send(candidates_uh.col(r).data(),candidates_uh.rows(), MPI_DOUBLE, r+1, 0, MPI_COMM_WORLD);
+	      }
+	  }
+        // recv the results
+	for (int r=0;r<candidates.cols();r++)
+	  {
+	    if (r < _solutions._lambda_reev)
+	      {
+                MPI_Status nfvalue_status;
+		double nfvalue;
+                //std::cout << "esostrategy.h 4th Recv Rank " << 0 << std::endl;
+                MPI_Recv(&nfvalue, 1, MPI_DOUBLE, r+1, 0, MPI_COMM_WORLD,&nfvalue_status);
 		nvcandidates.emplace_back(nfvalue,_solutions._candidates.at(r),r);
 		nfcalls++;
 	      }
-	    else nvcandidates.emplace_back(_solutions._candidates.at(r).get_fvalue(),_solutions._candidates.at(r),r);
+	    else
+                nvcandidates.emplace_back(_solutions._candidates.at(r).get_fvalue(),_solutions._candidates.at(r),r);
 	  }
 	}
 

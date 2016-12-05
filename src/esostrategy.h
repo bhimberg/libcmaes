@@ -23,6 +23,7 @@
 #define ESOSTRATEGY_H
 
 #include "eo_matrix.h" // to include Eigen everywhere.
+#include "mpi.h" // to include MPI everywhere
 #include "candidate.h"
 #include "eigenmvn.h"
 #include <random>
@@ -190,7 +191,22 @@ namespace libcmaes
      * \brief returns reference to current solution object
      * @return current solution object
      */
-    TSolutions& get_solutions() { return _solutions; }
+    TSolutions& get_solutions() {
+        // this is called at the close of the cmaes function, so
+        // we signal to all MPI processes it is time to pack up
+        // and go home
+        int world_size;
+        MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+        int command = 1;
+        for (int i = 1; i < world_size; ++i)
+            MPI_Send(&command, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+
+        // now we clear MPI state for the master
+        MPI_Finalize();
+
+        return _solutions;
+    }
 
     /**
      * \brief returns reference to current optimization parameters object
