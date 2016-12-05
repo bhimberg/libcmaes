@@ -48,6 +48,47 @@ AC_MSG_ERROR([Cannot find Eigen3])
 fi
 AM_CONDITIONAL(HAVE_EIGEN3, test x"$lib_eig_avail" = xyes)
 
+# configure MPI
+AC_ARG_VAR(MPICXX,[MPI C++ compiler command])
+AC_CHECK_PROGS(MPICXX, mpic++ mpicxx mpiCC hcp mpxlC_r mpxlC mpCC cmpic++, $CXX)
+acx_mpi_save_CXX="$CXX"
+CXX="$MPICXX"
+AC_SUBST(MPICXX)
+
+if test x = x"$MPILIBS"; then
+        AC_CHECK_FUNC(MPI_Init, [MPILIBS=" "])
+fi
+
+if test x = x"$MPILIBS"; then
+        AC_CHECK_LIB(mpi, MPI_Init, [MPILIBS="-lmpi"])
+fi
+if test x = x"$MPILIBS"; then
+        AC_CHECK_LIB(mpich, MPI_Init, [MPILIBS="-lmpich"])
+fi
+
+dnl We have to use AC_TRY_COMPILE and not AC_CHECK_HEADER because the
+dnl latter uses $CPP, not $CC (which may be mpicc).
+if test x != x"$MPILIBS"; then
+        AC_MSG_CHECKING([for mpi.h])
+        AC_TRY_COMPILE([#include <mpi.h>],[],[AC_MSG_RESULT(yes)], [MPILIBS=""
+                AC_MSG_RESULT(no)])
+fi
+
+CXX="$acx_mpi_save_CXX"
+AC_SUBST(MPILIBS)
+
+# Finally, execute ACTION-IF-FOUND/ACTION-IF-NOT-FOUND:
+if test x = x"$MPILIBS"; then
+        AC_MSG_ERROR([Cannot find MPI])
+        :
+else
+        CXX=$MPICXX
+        LIBS=$LIBS $MPILIBS
+        AC_DEFINE(HAVE_MPI,1,[Define if you have the MPI library.])
+        :
+fi
+dnl ACX_MPI
+
 # Check if there is google-gflags library installed.
 AC_ARG_WITH(gflags, AS_HELP_STRING[--with-gflags=GFLAGS_DIR],
   GFLAGS_CFLAGS="-I${with_gflags}/include"
