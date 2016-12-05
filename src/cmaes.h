@@ -61,17 +61,14 @@ namespace libcmaes
 
                 // read a command
                 int command;
-                //std::cout << "cmaes.h 1st Recv Rank " << world_rank << std::endl;
                 MPI_Recv(&command,1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
 
                 // and we choose an action
                 if (command == 0)
                 {
                     // recv candidate, evaluate with FitFunc, and send fitness
-                    //std::cout << "cmaes.h 2nd Recv Rank " << world_rank << std::endl;
                     MPI_Recv(candidate.data(),candidate.size(), MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, &status);
                     double fitness = func(candidate.data(), candidate.size());
-                    //std::cout << "cmaes.h 1st Send Rank " << world_rank << std::endl;
                     MPI_Send(&fitness, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
                 }
                 else

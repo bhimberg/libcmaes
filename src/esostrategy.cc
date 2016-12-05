@@ -94,7 +94,6 @@ namespace libcmaes
 	_solutions._candidates.at(r).set_x(candidates.col(r));
 	_solutions._candidates.at(r).set_id(r);
         // send the evaluation command
-        //std::cout << "esostrategy.h 1st Send Rank " << 0 << std::endl;
         for (int g = 0; g < _parameters._gamma; ++g)
         {
             MPI_Send(&command, 1, MPI_INT, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
@@ -102,12 +101,10 @@ namespace libcmaes
             // send the data to be evaluated
             if (phenocandidates.size())
             {
-                std::cout << "esostrategy.h 2nd Send Rank " << 0 << " evalp" << std::endl;
                 MPI_Send(phenocandidates.col(r).data(), candidates.rows(), MPI_DOUBLE, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
             }
             else
             {
-                std::cout << "esostrategy.h 3rd Send Rank " << 0 << " eval" <<  std::endl;
                 MPI_Send(candidates.col(r).data(), candidates.rows(), MPI_DOUBLE, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
             }
         }
@@ -121,13 +118,13 @@ namespace libcmaes
         MPI_Status fvalue_status;
         
         double fvalue = 0.0;
-        double fvalue_count = 0;
+        size_t fvalue_count = 0;
         for (int g = 0; g < _parameters._gamma; ++g)
         {
             double fvalue_temp = std::numeric_limits<double>::infinity();
-            //std::cout << "esostrategy.h 1st Recv Rank " << 0 << std::endl;
             MPI_Recv(&fvalue_temp, 1, MPI_DOUBLE, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD,&fvalue_status);
 
+            std::cout << fvalue_temp << ",";
             if (std::isfinite(fvalue_temp))
             {
                 fvalue += fvalue_temp;
@@ -135,6 +132,7 @@ namespace libcmaes
             }
         }
         fvalue /= fvalue_count;
+        std::cout << "avg: " << fvalue << "count: " << fvalue_count << std::endl;
         _solutions._candidates.at(r).set_fvalue(fvalue);
       }
     int nfcalls = candidates.cols();
@@ -211,10 +209,8 @@ namespace libcmaes
     int command = 0;
     for (int g = 0; g < _parameters._gamma; ++g)
     {
-        //std::cout << "esostrategy.h 4th Send Rank " << 0 << std::endl;
         MPI_Send(&command, 1, MPI_INT, 1+g, 0, MPI_COMM_WORLD);
 
-        //std::cout << "esostrategy.h 5th Send Rank " << 0 << std::endl;
         MPI_Send(x.data(), _parameters._dim, MPI_DOUBLE, 1+g, 0, MPI_COMM_WORLD);
     }
 
@@ -224,11 +220,9 @@ namespace libcmaes
 	dVec ei1 = x;
 	ei1(i,0) += epsilon(i);
 	ei1(i,0) = std::min(ei1(i,0),_parameters.get_gp().get_boundstrategy_ref().getUBound(i));
-        //std::cout << "esostrategy.h 6th Send Rank " << 0 << " grad" <<  std::endl;
         for (int g = 0; g < _parameters._gamma; ++g)
         {
             MPI_Send(&command, 1, MPI_INT, (i+1)*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
-            std::cout << "esostrategy.h 7th Send Rank " << 0 << " grad " << std::endl;
             MPI_Send(ei1.data(), _parameters._dim, MPI_DOUBLE, (i+1)*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
         }
     }
@@ -240,7 +234,6 @@ namespace libcmaes
     for (int g = 0; g < _parameters._gamma; ++g)
     {
         double fx_temp = std::numeric_limits<double>::infinity();
-        //std::cout << "esostrategy.h 2nd Recv Rank " << 0 << std::endl;
         MPI_Recv(&fx_temp, 1, MPI_DOUBLE, 1+g, 0, MPI_COMM_WORLD,&fx_status);
         if (std::isfinite(fx_temp) == true)
         {
@@ -259,7 +252,6 @@ namespace libcmaes
         for (int g = 0; g < _parameters._gamma; ++g)
         {
             double gradi_temp = std::numeric_limits<double>::infinity();
-            //std::cout << "esostrategy.h 3rd Recv Rank " << 0 << std::endl;
             MPI_Recv(&gradi, 1, MPI_DOUBLE, (i+1)*_parameters._gamma+g+1, 0, MPI_COMM_WORLD,&gradi_status);
             if (std::isfinite(gradi_temp) == true)
             {
@@ -461,9 +453,7 @@ namespace libcmaes
 	      {
                 for (int g = 0; g < _parameters._gamma; ++g)
                 {
-                  //std::cout << "esostrategy.h 8th Send Rank " << 0 << std::endl;
                   MPI_Send(&command,1, MPI_INT, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
-                  //std::cout << "esostrategy.h 9th Send Rank " << 0 << std::endl;
                   MPI_Send(candidates_uh.col(r).data(),candidates_uh.rows(), MPI_DOUBLE, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD);
                 }
 	      }
@@ -479,7 +469,6 @@ namespace libcmaes
                 for (int g = 0; g < _parameters._gamma; ++g)
                 {
                     double nfvalue_temp = std::numeric_limits<double>::infinity();
-                    //std::cout << "esostrategy.h 4th Recv Rank " << 0 << std::endl;
                     MPI_Recv(&nfvalue_temp, 1, MPI_DOUBLE, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD,&nfvalue_status);
 
                     if (std::isfinite(nfvalue_temp))
