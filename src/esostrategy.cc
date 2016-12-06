@@ -124,7 +124,7 @@ namespace libcmaes
             double fvalue_temp = std::numeric_limits<double>::infinity();
             MPI_Recv(&fvalue_temp, 1, MPI_DOUBLE, r*_parameters._gamma+g+1, 0, MPI_COMM_WORLD,&fvalue_status);
 
-            std::cout << fvalue_temp << ",";
+            //std::cout << fvalue_temp << ",";
             if (std::isfinite(fvalue_temp))
             {
                 fvalue += fvalue_temp;
@@ -132,7 +132,7 @@ namespace libcmaes
             }
         }
         fvalue /= fvalue_count;
-        std::cout << "avg: " << fvalue << "count: " << fvalue_count << std::endl;
+        //std::cout << "avg: " << fvalue << "count: " << fvalue_count << std::endl;
         _solutions._candidates.at(r).set_fvalue(fvalue);
       }
     int nfcalls = candidates.cols();
