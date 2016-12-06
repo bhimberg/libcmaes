@@ -25,6 +25,7 @@
 #include "cmasolutions.h"
 #include "cmastopcriteria.h"
 #include <iostream>
+#include <iomanip>
 #include "llogging.h"
 
 #ifdef HAVE_DEBUG
@@ -56,6 +57,18 @@ namespace libcmaes
 	_uhgen.seed(static_cast<uint64_t>(time(nullptr)));
 	_uhunif = std::uniform_real_distribution<>(0,1);
       }
+    /* crude, but open file for saving */
+    _output.open("OUTPUT/libcmaes-output.dat", std::ios::trunc);
+    _output
+        << "# " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+        << "fval";
+    for (int i = 0; i < _parameters._dim; ++i)
+    {
+        _output
+            << "  " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+            << char('a' + i);
+    }
+    _output << std::endl;
   }
 
   template<class TParameters,class TSolutions,class TStopCriteria>
@@ -73,6 +86,18 @@ namespace libcmaes
 	_uhgen.seed(static_cast<uint64_t>(time(nullptr)));
 	_uhunif = std::uniform_real_distribution<>(0,1);
       }
+    /* crude, but open file for saving */
+    _output.open("OUTPUT/libcmaes-output.dat", std::ios::trunc);
+    _output
+        << "# " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+        << "fval";
+    for (int i = 0; i < _parameters._dim; ++i)
+    {
+        _output
+            << "  " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+            << char('a' + i);
+    }
+    _output << std::endl;
   }
   
   template<class TParameters,class TSolutions,class TStopCriteria>
@@ -110,6 +135,8 @@ namespace libcmaes
         }
       }
     // we will retrieve our fvals now
+    int min_index = 0;
+    double min_fvalue = std::numeric_limits<double>::infinity();
     for (int r=0;r<candidates.cols();r++)
       {
 	_solutions._candidates.at(r).set_x(candidates.col(r));
@@ -132,12 +159,39 @@ namespace libcmaes
             }
         }
         fvalue /= fvalue_count;
-        //std::cout << "avg: " << fvalue << "count: " << fvalue_count << std::endl;
         _solutions._candidates.at(r).set_fvalue(fvalue);
+
+        /* tracking the best config */
+        if (fvalue < min_fvalue)
+        {
+            min_index = r;
+            min_fvalue = fvalue;
+        }
       }
-    int nfcalls = candidates.cols();
-    
+
+    /* write best candidate per iteration to disk */
+    _output
+        << "  " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+        << std::scientific << min_fvalue;
+    for (int i = 0; i < candidates.rows(); ++i)
+    {
+        if (phenocandidates.size())
+        {
+            _output
+                << "  " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+                << std::scientific << phenocandidates.col(min_index).data()[i];
+        }
+        else
+        {
+        _output
+            << "  " << std::setfill(' ') << std::setw(15) << std::setprecision(8)
+            << std::scientific << candidates.col(min_index).data()[i];
+        }
+    }
+    _output << std::endl;
+
     // evaluation step of uncertainty handling scheme.
+    int nfcalls = candidates.cols();
     if (_parameters._uh)
       {
 				perform_uh(candidates,phenocandidates,nfcalls);

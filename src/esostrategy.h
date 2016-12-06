@@ -27,6 +27,7 @@
 #include "candidate.h"
 #include "eigenmvn.h"
 #include <random>
+#include <fstream>
 
 namespace libcmaes
 {
@@ -276,6 +277,7 @@ namespace libcmaes
     std::mt19937 _uhgen; /**< random device used for uncertainty handling operations. */
     std::uniform_real_distribution<> _uhunif;
     Eigen::EigenMultivariateNormal<double> _uhesolver;
+    std::ofstream _output;
   };
   
 }
